@@ -1,44 +1,79 @@
 package com.example.crazytranslator.repository
 
-import com.example.crazytranslator.Secret
-import com.google.ai.client.generativeai.GenerativeModel
+import android.content.Context
+import com.google.mlkit.genai.common.FeatureStatus
+import com.google.mlkit.genai.prompt.Generation
+import kotlinx.coroutines.flow.collect
 
-class TranslationRepository {
-    private val generativeModel = GenerativeModel(
-        modelName = "gemini-1.5-flash",
-        apiKey = Secret.GEMINI_API_KEY
-    )
+class TranslationRepository(private val context: Context) {
+
+    // The ML Kit GenAI "Prompt" API (on-device Gemini Nano via AICore).
+    // The default client is sufficient; this beta does not expose temperature /
+    // maxOutputTokens through GenerationConfig/ModelConfig yet.
+    private val model = Generation.getClient()
 
     suspend fun translateText(text: String, personaPrompt: String, screenContext: String = ""): String {
         if (text.isBlank()) return ""
-        
+
+        // checkStatus() is a suspend fun returning an @FeatureStatus Int.
+        val status = model.checkStatus()
+        if (status != FeatureStatus.AVAILABLE) {
+            if (status == FeatureStatus.DOWNLOADABLE || status == FeatureStatus.DOWNLOADING) {
+                // Drive the download flow to completion, then fall through to generate.
+                return try {
+                    model.download().collect { }
+                    if (model.checkStatus() == FeatureStatus.AVAILABLE) {
+                        generate(text, personaPrompt, screenContext)
+                    } else {
+                        "Downloading AI Model..."
+                    }
+                } catch (e: Exception) {
+                    "Error: model download failed (${e.message})"
+                }
+            }
+            return "On-device AI not available (Status: $status)"
+        }
+
+        return generate(text, personaPrompt, screenContext)
+    }
+
+    private suspend fun generate(text: String, personaPrompt: String, screenContext: String): String {
+        // Sophisticated prompt for Gemini Nano using few-shot style and clear instructions
         val prompt = """
-            Context & Persona Goal:
-            1. User's Base Preference: $personaPrompt
-            2. Task: Translate the 'Target Text' into Korean.
-            3. Global Screen Context: 
-               ---
-               $screenContext
-               ---
-            4. Dynamic Persona Adaptation: 
-               - Use the 'Global Screen Context' to identify who is speaking (look for names, titles, relationship markers).
-               - Analyze the linguistic cues in the 'Target Text' (sentence endings like '~desu', '~noda', '~ze', honorifics, etc.).
-               - If the speaker is a known character or has a distinct personality, adapt the Korean translation to reflect their unique 'persona' (tone, politeness level, vocabulary).
-               - Combine these insights with the 'User's Base Preference'.
-            
-            Target Text:
-            ---
+            [System Task]
+            Translate the 'Target' into Korean naturally.
+
+            [Instruction]
+            1. Identify the speaker's tone from 'Target' (e.g., Japanese '~ze', '~wa', '~desu' or English slang vs formal).
+            2. Use 'Screen Context' to find character names or relationship roles.
+            3. Combine this with the user's preference: $personaPrompt.
+            4. If the speaker sounds informal, use Korean 'Banmal'. If formal, use 'Haeyo-che' or 'Hapsyo-che'.
+            5. Keep character-specific unique endings if possible.
+
+            [Context]
+            $screenContext
+
+            [Examples]
+            Target: "俺の勝ちだぜ！" -> Result: "내가 이겼다고!" (Tough/Informal)
+            Target: "お待ちしておりました。" -> Result: "기다리고 있었습니다." (Formal/Polite)
+            Target: "何してるの？" -> Result: "뭐 하고 있어?" (Friendly/Informal)
+
+            [Target]
             $text
-            ---
-            
-            Return only the translated Korean text.
+
+            [Result]
         """.trimIndent()
 
         return try {
-            val response = generativeModel.generateContent(prompt)
-            response.text ?: ""
+            val response = model.generateContent(prompt)
+            response.candidates.firstOrNull()?.text ?: ""
         } catch (e: Exception) {
             "Error: ${e.message}"
         }
+    }
+
+    /** Returns an @FeatureStatus Int (see [FeatureStatus]). */
+    suspend fun checkModelStatus(): Int {
+        return model.checkStatus()
     }
 }

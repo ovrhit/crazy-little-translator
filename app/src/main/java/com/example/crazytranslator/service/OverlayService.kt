@@ -21,8 +21,13 @@ import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
+import androidx.savedstate.SavedStateRegistry
+import androidx.savedstate.SavedStateRegistryController
+import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.example.crazytranslator.repository.OcrRepository
 import com.example.crazytranslator.repository.PreferencesRepository
@@ -35,12 +40,20 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
-class OverlayService : LifecycleService() {
+class OverlayService : LifecycleService(), ViewModelStoreOwner, SavedStateRegistryOwner {
+
+    // A foreground Service is a LifecycleOwner but not a ViewModelStoreOwner /
+    // SavedStateRegistryOwner. ComposeView needs all three set on its view tree,
+    // so we provide our own store and saved-state registry.
+    override val viewModelStore = ViewModelStore()
+    private val savedStateRegistryController = SavedStateRegistryController.create(this)
+    override val savedStateRegistry: SavedStateRegistry
+        get() = savedStateRegistryController.savedStateRegistry
 
     private val job = SupervisorJob()
     private val scope = CoroutineScope(Dispatchers.Main + job)
     private val ocrRepository = OcrRepository()
-    private val translationRepository = TranslationRepository()
+    private lateinit var translationRepository: TranslationRepository
     private lateinit var preferencesRepository: PreferencesRepository
     private lateinit var viewModel: OverlayViewModel
 
@@ -55,6 +68,8 @@ class OverlayService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
+        savedStateRegistryController.performRestore(null)
+        translationRepository = TranslationRepository(this)
         preferencesRepository = PreferencesRepository(this)
         viewModel = OverlayViewModel(translationRepository)
         
@@ -79,7 +94,7 @@ class OverlayService : LifecycleService() {
         return START_STICKY
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
         return null
     }
@@ -188,6 +203,7 @@ class OverlayService : LifecycleService() {
         imageReader?.close()
         handlerThread?.quitSafely()
         job.cancel()
+        viewModelStore.clear()
     }
 
     private fun createNotificationChannel() {

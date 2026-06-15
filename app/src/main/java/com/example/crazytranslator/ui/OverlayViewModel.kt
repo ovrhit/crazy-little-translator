@@ -25,19 +25,41 @@ class OverlayViewModel(
     private val _errorState = MutableStateFlow<String?>(null)
     val errorState: StateFlow<String?> = _errorState.asStateFlow()
 
+    // Simple cache: Map<OriginalText, TranslatedText>
+    private val translationCache = mutableMapOf<String, String>()
+    private var lastPersonaPrompt = ""
+
     fun updateOcrResults(blocks: List<OcrBlock>, personaPrompt: String, screenContext: String) {
+        // Clear cache if persona changed significantly
+        if (personaPrompt != lastPersonaPrompt) {
+            translationCache.clear()
+            lastPersonaPrompt = personaPrompt
+        }
+
         viewModelScope.launch {
             try {
                 _errorState.value = null
                 val translated = blocks.map { block ->
-                    val translatedText = translationRepository.translateText(
-                        text = block.text,
-                        personaPrompt = personaPrompt,
-                        screenContext = screenContext
-                    )
+                    val cachedTranslation = translationCache[block.text]
+                    
+                    val translatedText = if (cachedTranslation != null) {
+                        cachedTranslation
+                    } else {
+                        val result = translationRepository.translateText(
+                            text = block.text,
+                            personaPrompt = personaPrompt,
+                            screenContext = screenContext
+                        )
+                        if (!result.startsWith("Error:") && !result.startsWith("On-device AI") && !result.startsWith("Downloading")) {
+                            translationCache[block.text] = result
+                        }
+                        result
+                    }
+
                     if (translatedText.startsWith("Error:")) {
                         _errorState.value = translatedText
                     }
+                    
                     TranslatedBlock(
                         originalText = block.text,
                         translatedText = translatedText,

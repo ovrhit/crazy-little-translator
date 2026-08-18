@@ -54,6 +54,6 @@
 
 ## AI 백엔드
 
-- 번역: **클라우드 Gemini** (`com.google.ai.client.generativeai`, 모델 `gemini-2.0-flash`). 모델명은 `TranslationRepository.kt`에서 변경 가능.
+- 번역: **클라우드 Gemini** (`com.google.ai.client.generativeai`, 모델 `gemini-flash-lite-latest`). 모델명은 `TranslationRepository.kt`에서 변경 가능.
 - API 키는 로컬 전용 `Secret.kt`(gitignore 대상)에서 읽습니다.
 - 참고: on-device Gemini Nano(ML Kit Prompt API)는 beta라 갤럭시 S25에서도 아직 프로비저닝되지 않아 클라우드 방식으로 전환했습니다.

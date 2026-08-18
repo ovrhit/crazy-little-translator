@@ -23,7 +23,7 @@
 
 - **언어/UI**: Kotlin 2.2.0, Jetpack Compose (MVVM)
 - **빌드**: Gradle 8.7, AGP 8.5.2 (compileSdk 34 / minSdk 26)
-- **AI**: 클라우드 Gemini (`com.google.ai.client.generativeai`, 모델 `gemini-2.0-flash`)
+- **AI**: 클라우드 Gemini (`com.google.ai.client.generativeai`, 모델 `gemini-flash-lite-latest`)
 - **OCR**: ML Kit Text Recognition
 - **기타**: DataStore(페르소나 영속화), Coroutines, Lifecycle/Foreground Service
 

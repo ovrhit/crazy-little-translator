@@ -58,7 +58,7 @@ class TranslationRepository(private val context: Context) {
     }
 
     companion object {
-        private const val MODEL_NAME = "gemini-2.0-flash"
+        private const val MODEL_NAME = "gemini-flash-lite-latest"
         const val NOT_CONFIGURED = "API 키가 설정되지 않았습니다 (Secret.kt)"
     }
 }

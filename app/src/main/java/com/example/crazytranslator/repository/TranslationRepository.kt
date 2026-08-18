@@ -15,8 +15,14 @@ class TranslationRepository(private val context: Context) {
     suspend fun translateText(text: String, personaPrompt: String, screenContext: String = ""): String {
         if (text.isBlank()) return ""
 
-        // checkStatus() is a suspend fun returning an @FeatureStatus Int.
-        val status = model.checkStatus()
+        // checkStatus() is a suspend fun returning an @FeatureStatus Int, but on
+        // devices without the AICore feature it throws GenAiException instead of
+        // returning UNAVAILABLE — catch it so we degrade gracefully.
+        val status = try {
+            model.checkStatus()
+        } catch (e: Exception) {
+            return "On-device AI not available (${e.message})"
+        }
         if (status != FeatureStatus.AVAILABLE) {
             if (status == FeatureStatus.DOWNLOADABLE || status == FeatureStatus.DOWNLOADING) {
                 // Drive the download flow to completion, then fall through to generate.
@@ -72,8 +78,12 @@ class TranslationRepository(private val context: Context) {
         }
     }
 
-    /** Returns an @FeatureStatus Int (see [FeatureStatus]). */
+    /** Returns an @FeatureStatus Int (see [FeatureStatus]); UNAVAILABLE if the check throws. */
     suspend fun checkModelStatus(): Int {
-        return model.checkStatus()
+        return try {
+            model.checkStatus()
+        } catch (e: Exception) {
+            FeatureStatus.UNAVAILABLE
+        }
     }
 }

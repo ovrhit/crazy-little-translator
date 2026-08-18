@@ -39,12 +39,14 @@
 
 ## 실행 / 테스트 시 주의 (중요)
 
-이 앱은 **on-device Gemini Nano (ML Kit GenAI Prompt API)** 를 씁니다. 실제 번역이 동작하려면:
+이 앱은 **클라우드 Gemini API**로 번역합니다. 실제 번역이 동작하려면:
 
-- **AICore 지원 기기**가 필요합니다: Pixel 8/8 Pro/9 계열, Galaxy S24+ 등 (Android 14+, AICore + Private Compute Core 탑재).
-- 그 외 기기/에뮬레이터에서는 AI 상태가 `UNAVAILABLE`로 뜨고 번역이 안 됩니다 (빌드/설치는 정상).
-- **에뮬레이터는 권장하지 않음**: AICore가 없고, 화면 캡처(MediaProjection) + 오버레이 동작도 실기기에서 확인하는 게 정확합니다.
-- 최초 사용 시 모델 다운로드(`DOWNLOADABLE` → 자동 다운로드)가 필요할 수 있습니다.
+- **API 키 설정 필수**: [Google AI Studio](https://aistudio.google.com/apikey)에서 무료 키를 발급받아
+  `app/src/main/java/com/example/crazytranslator/Secret.kt`의 `GEMINI_API_KEY`에 붙여넣으세요.
+  - 이 파일은 `.gitignore`로 제외되어 git에 올라가지 않습니다. **키를 커밋/공유하지 마세요.**
+  - 키가 없으면 앱은 정상 실행되지만 상태가 `API 키 미설정`으로 표시됩니다.
+- **네트워크 연결 필요** (온디바이스 아님). AICore 지원 여부와 무관하게 모든 기기에서 동작합니다.
+- 화면 캡처(MediaProjection) + 오버레이는 실기기에서 확인하는 게 정확합니다.
 
 런타임 권한(앱 내 버튼 순서대로):
 1. **다른 앱 위에 표시(SYSTEM_ALERT_WINDOW)** 권한 허용
@@ -52,5 +54,6 @@
 
 ## AI 백엔드
 
-이 앱은 **on-device Gemini Nano만** 사용합니다. 클라우드 Gemini API 연결은 쓰지 않으며,
-API 키를 담고 있던 `Secret.kt`는 제거했습니다. (해당 파일은 `.gitignore`로 제외돼 있어 git에 올라간 적 없음)
+- 번역: **클라우드 Gemini** (`com.google.ai.client.generativeai`, 모델 `gemini-2.0-flash`). 모델명은 `TranslationRepository.kt`에서 변경 가능.
+- API 키는 로컬 전용 `Secret.kt`(gitignore 대상)에서 읽습니다.
+- 참고: on-device Gemini Nano(ML Kit Prompt API)는 beta라 갤럭시 S25에서도 아직 프로비저닝되지 않아 클라우드 방식으로 전환했습니다.

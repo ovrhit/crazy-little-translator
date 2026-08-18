@@ -60,8 +60,8 @@ dependencies {
     // ML Kit Text Recognition
     implementation("com.google.mlkit:text-recognition:16.0.0")
 
-    // On-Device Gemini Nano (ML Kit GenAI Prompt API)
-    implementation("com.google.mlkit:genai-prompt:1.0.0-beta2")
+    // Cloud Gemini (Google AI SDK) — translation backend
+    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")

@@ -50,13 +50,14 @@ class OverlayViewModel(
                             personaPrompt = personaPrompt,
                             screenContext = screenContext
                         )
-                        if (!result.startsWith("Error:") && !result.startsWith("On-device AI") && !result.startsWith("Downloading")) {
+                        val isFailure = result.startsWith("Error:") || result.startsWith("API 키")
+                        if (!isFailure) {
                             translationCache[block.text] = result
                         }
                         result
                     }
 
-                    if (translatedText.startsWith("Error:")) {
+                    if (translatedText.startsWith("Error:") || translatedText.startsWith("API 키")) {
                         _errorState.value = translatedText
                     }
                     

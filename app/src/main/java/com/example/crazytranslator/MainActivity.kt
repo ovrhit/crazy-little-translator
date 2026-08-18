@@ -34,7 +34,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import com.example.crazytranslator.repository.PreferencesRepository
 import com.example.crazytranslator.repository.TranslationRepository
-import com.google.mlkit.genai.common.FeatureStatus
 import kotlinx.coroutines.launch
 
 import androidx.compose.foundation.layout.Row
@@ -78,13 +77,7 @@ class MainActivity : ComponentActivity() {
             val scope = rememberCoroutineScope()
 
             LaunchedEffect(Unit) {
-                val status = translationRepository.checkModelStatus()
-                aiStatus = when (status) {
-                    FeatureStatus.AVAILABLE -> "AI Model Ready"
-                    FeatureStatus.DOWNLOADABLE -> "AI Model Downloadable"
-                    FeatureStatus.UNAVAILABLE -> "AI Not Supported on this Device"
-                    else -> "AI Status: $status"
-                }
+                aiStatus = translationRepository.checkModelStatus()
             }
 
             MaterialTheme {

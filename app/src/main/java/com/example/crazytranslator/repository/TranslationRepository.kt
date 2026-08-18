@@ -1,50 +1,22 @@
 package com.example.crazytranslator.repository
 
 import android.content.Context
-import com.google.mlkit.genai.common.FeatureStatus
-import com.google.mlkit.genai.prompt.Generation
-import kotlinx.coroutines.flow.collect
+import com.example.crazytranslator.Secret
+import com.google.ai.client.generativeai.GenerativeModel
 
 class TranslationRepository(private val context: Context) {
 
-    // The ML Kit GenAI "Prompt" API (on-device Gemini Nano via AICore).
-    // The default client is sufficient; this beta does not expose temperature /
-    // maxOutputTokens through GenerationConfig/ModelConfig yet.
-    private val model = Generation.getClient()
+    private val apiKey = Secret.GEMINI_API_KEY.trim()
+    val isConfigured: Boolean = apiKey.isNotEmpty()
+
+    // Cloud Gemini. Change the model name here if needed.
+    private val model: GenerativeModel? =
+        if (isConfigured) GenerativeModel(modelName = MODEL_NAME, apiKey = apiKey) else null
 
     suspend fun translateText(text: String, personaPrompt: String, screenContext: String = ""): String {
         if (text.isBlank()) return ""
+        val model = this.model ?: return NOT_CONFIGURED
 
-        // checkStatus() is a suspend fun returning an @FeatureStatus Int, but on
-        // devices without the AICore feature it throws GenAiException instead of
-        // returning UNAVAILABLE — catch it so we degrade gracefully.
-        val status = try {
-            model.checkStatus()
-        } catch (e: Exception) {
-            return "On-device AI not available (${e.message})"
-        }
-        if (status != FeatureStatus.AVAILABLE) {
-            if (status == FeatureStatus.DOWNLOADABLE || status == FeatureStatus.DOWNLOADING) {
-                // Drive the download flow to completion, then fall through to generate.
-                return try {
-                    model.download().collect { }
-                    if (model.checkStatus() == FeatureStatus.AVAILABLE) {
-                        generate(text, personaPrompt, screenContext)
-                    } else {
-                        "Downloading AI Model..."
-                    }
-                } catch (e: Exception) {
-                    "Error: model download failed (${e.message})"
-                }
-            }
-            return "On-device AI not available (Status: $status)"
-        }
-
-        return generate(text, personaPrompt, screenContext)
-    }
-
-    private suspend fun generate(text: String, personaPrompt: String, screenContext: String): String {
-        // Sophisticated prompt for Gemini Nano using few-shot style and clear instructions
         val prompt = """
             [System Task]
             Translate the 'Target' into Korean naturally.
@@ -55,6 +27,7 @@ class TranslationRepository(private val context: Context) {
             3. Combine this with the user's preference: $personaPrompt.
             4. If the speaker sounds informal, use Korean 'Banmal'. If formal, use 'Haeyo-che' or 'Hapsyo-che'.
             5. Keep character-specific unique endings if possible.
+            6. Output ONLY the Korean translation, with no explanation or quotes.
 
             [Context]
             $screenContext
@@ -72,18 +45,20 @@ class TranslationRepository(private val context: Context) {
 
         return try {
             val response = model.generateContent(prompt)
-            response.candidates.firstOrNull()?.text ?: ""
+            response.text?.trim() ?: ""
         } catch (e: Exception) {
             "Error: ${e.message}"
         }
     }
 
-    /** Returns an @FeatureStatus Int (see [FeatureStatus]); UNAVAILABLE if the check throws. */
-    suspend fun checkModelStatus(): Int {
-        return try {
-            model.checkStatus()
-        } catch (e: Exception) {
-            FeatureStatus.UNAVAILABLE
-        }
+    /** Human-readable status shown on the main screen. */
+    fun checkModelStatus(): String {
+        return if (isConfigured) "Cloud Gemini Ready ($MODEL_NAME)"
+        else "API 키 미설정 (Secret.kt)"
+    }
+
+    companion object {
+        private const val MODEL_NAME = "gemini-2.0-flash"
+        const val NOT_CONFIGURED = "API 키가 설정되지 않았습니다 (Secret.kt)"
     }
 }

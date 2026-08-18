@@ -17,6 +17,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
 import android.util.DisplayMetrics
+import android.util.Log
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.app.NotificationCompat
@@ -65,6 +66,7 @@ class OverlayService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
 
     private var overlayView: ComposeView? = null
     private var lastOcrText = ""
+    private var lastProcessTime = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -102,7 +104,13 @@ class OverlayService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
     private fun startProjection(resultCode: Int, data: Intent) {
         val mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
         mediaProjection = mpManager.getMediaProjection(resultCode, data)
-        
+        Log.d("CLT", "startProjection: mediaProjection=${mediaProjection != null}")
+        // Android 14+ (API 34) requires a registered callback before createVirtualDisplay().
+        mediaProjection?.registerCallback(object : MediaProjection.Callback() {
+            override fun onStop() {
+                Log.d("CLT", "MediaProjection onStop")
+            }
+        }, backgroundHandler)
         setupImageReader()
     }
 
@@ -122,10 +130,20 @@ class OverlayService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
             DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
             imageReader?.surface, null, null
         )
+        Log.d("CLT", "setupImageReader: ${width}x${height} virtualDisplay=${virtualDisplay != null}")
 
         imageReader?.setOnImageAvailableListener({ reader ->
             val image = reader.acquireLatestImage() ?: return@setOnImageAvailableListener
-            
+
+            // Throttle: OCR/translate at most once per interval to avoid hammering
+            // the OCR engine and the translation API (free tier is ~15 req/min).
+            val now = System.currentTimeMillis()
+            if (now - lastProcessTime < PROCESS_INTERVAL_MS) {
+                image.close()
+                return@setOnImageAvailableListener
+            }
+            lastProcessTime = now
+
             val planes = image.planes
             val buffer = planes[0].buffer
             val pixelStride = planes[0].pixelStride
@@ -173,11 +191,12 @@ class OverlayService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
     private fun processImage(bitmap: Bitmap) {
         scope.launch(Dispatchers.Default) {
             val blocks = ocrRepository.recognizeTextBlocks(bitmap)
+            Log.d("CLT", "processImage: OCR blocks=${blocks.size}")
             if (blocks.isEmpty()) {
                 bitmap.recycle()
                 return@launch
             }
-            
+
             val currentFullText = blocks.joinToString("\n") { it.text }
 
             if (currentFullText != lastOcrText) {
@@ -229,5 +248,6 @@ class OverlayService : LifecycleService(), ViewModelStoreOwner, SavedStateRegist
         private const val NOTIFICATION_ID = 1
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_DATA = "extra_data"
+        private const val PROCESS_INTERVAL_MS = 2000L
     }
 }

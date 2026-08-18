@@ -39,38 +39,34 @@ class OverlayViewModel(
         viewModelScope.launch {
             try {
                 _errorState.value = null
-                val translated = blocks.map { block ->
-                    val cachedTranslation = translationCache[block.text]
-                    
-                    val translatedText = if (cachedTranslation != null) {
-                        cachedTranslation
-                    } else {
-                        val result = translationRepository.translateText(
-                            text = block.text,
-                            personaPrompt = personaPrompt,
-                            screenContext = screenContext
-                        )
-                        val isFailure = result.startsWith("Error:") || result.startsWith("API 키")
-                        if (!isFailure) {
-                            translationCache[block.text] = result
-                        }
-                        result
-                    }
 
-                    if (translatedText.startsWith("Error:") || translatedText.startsWith("API 키")) {
-                        _errorState.value = translatedText
+                // Translate only blocks we haven't cached yet — in ONE batched request.
+                val uncached = blocks.map { it.text }.distinct().filter { it.isNotBlank() && it !in translationCache }
+                if (uncached.isNotEmpty()) {
+                    val results = translationRepository.translateBatch(uncached, personaPrompt, screenContext)
+                    uncached.forEachIndexed { i, source ->
+                        val out = results.getOrNull(i).orEmpty()
+                        if (isFailure(out)) {
+                            _errorState.value = out
+                        } else if (out.isNotBlank()) {
+                            translationCache[source] = out
+                        }
                     }
-                    
+                }
+
+                _translatedBlocks.value = blocks.map { block ->
                     TranslatedBlock(
                         originalText = block.text,
-                        translatedText = translatedText,
+                        translatedText = translationCache[block.text] ?: "",
                         boundingBox = block.boundingBox
                     )
                 }
-                _translatedBlocks.value = translated
             } catch (e: Exception) {
                 _errorState.value = "Connection Error"
             }
         }
     }
+
+    private fun isFailure(text: String): Boolean =
+        text.startsWith("Error:") || text.startsWith("API ")
 }
